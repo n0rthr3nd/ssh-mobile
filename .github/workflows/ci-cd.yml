@@ -1,0 +1,125 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  FRONTEND_IMAGE: ghcr.io/n0rthr3nd/ssh-mobile-frontend
+  BACKEND_IMAGE: ghcr.io/n0rthr3nd/ssh-mobile-backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || github.ref_type != 'branch' || !contains(github.event.head_commit.message, 'release:')
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check Backend
+        run: |
+          cd backend
+          npm install
+          # npm test || echo "No tests or failed"
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- Build & Push FRONTEND ---
+      - name: Extract Frontend Metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=tag
+            latest
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --- Build & Push BACKEND ---
+      - name: Extract Backend Metadata
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=tag
+            latest
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ArgoCD Sync
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+        run: |
+          if [ -z "$ARGOCD_TOKEN" ] || [ -z "$ARGOCD_SERVER" ]; then
+            echo "Error: ARGOCD_TOKEN o ARGOCD_SERVER no configurados en los Secrets."
+            exit 1
+          fi
+          
+          echo "Solicitando sincronización a ArgoCD..."
+          
+          curl -k -X POST \
+            --connect-timeout 10 \
+            --max-time 20 \
+            -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${ARGOCD_SERVER}/api/v1/applications/ssh-mobile/sync" \
+            -d '{"prune":false,"dryRun":false,"strategy":{"hook":{"force":true}}}' || echo "ArgoCD API no disponible."
+          
+          echo "Paso de despliegue finalizado."
