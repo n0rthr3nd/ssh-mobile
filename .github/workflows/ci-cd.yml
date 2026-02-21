@@ -8,8 +8,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  FRONTEND_IMAGE: ghcr.io/n0rthr3nd/ssh-mobile-frontend
-  BACKEND_IMAGE: ghcr.io/n0rthr3nd/ssh-mobile-backend
+  FRONTEND_IMAGE: ghcr.io/3kn4ls/ssh-mobile-frontend
+  BACKEND_IMAGE: ghcr.io/3kn4ls/ssh-mobile-backend
 
 jobs:
   test:

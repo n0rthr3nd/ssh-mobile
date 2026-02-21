@@ -26,7 +26,7 @@ BACKEND_IMAGE="ssh-mobile-backend"
 FRONTEND_DEPLOYMENT="k8s/frontend-deployment.yaml"
 BACKEND_DEPLOYMENT="k8s/backend-deployment.yaml"
 VERSION_FILE="VERSION"
-REGISTRY_USER="n0rthr3nd"
+REGISTRY_USER="3kn4ls"
 
 # Leer versión actual
 if [ ! -f "$VERSION_FILE" ]; then
