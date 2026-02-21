@@ -14,9 +14,11 @@ spec:
       labels:
         app: ssh-mobile-backend
     spec:
+      imagePullSecrets:
+        - name: ghcr-auth
       containers:
       - name: ssh-mobile-backend
-        image: ghcr.io/n0rthr3nd/ssh-mobile-backend:v1.0.0
+        image: ghcr.io/3kn4ls/ssh-mobile-backend:v1.0.0
         imagePullPolicy: Always
         ports:
         - containerPort: 3001
